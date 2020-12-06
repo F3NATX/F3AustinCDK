@@ -1,5 +1,5 @@
 {
-    "app": "npx ts-node --prefer-ts-exts bin/f3_austin_cdk.ts",
+    "app": "npx ts-node --prefer-ts-exts stack/f3_austin_cdk.ts",
     "output": "build/cdk.out",
     "requireApproval": "never",
     "context": {

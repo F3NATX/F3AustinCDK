@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import * as cdk from '@aws-cdk/core';
 import { F3AustinCdkStack } from '../lib/f3_austin_cdk-stack';
 
