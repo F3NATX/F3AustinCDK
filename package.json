@@ -2,7 +2,7 @@
     "name": "f3_austin_cdk",
     "version": "0.1.0",
     "bin": {
-        "f3_austin_cdk": "bin/f3_austin_cdk.js"
+        "f3_austin_cdk": "stack/f3_austin_cdk.js"
     },
     "scripts": {
         "build": "tsc && eslint --fix . --ext .ts && prettier --write . --loglevel warn",
