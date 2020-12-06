@@ -6,6 +6,6 @@ const app = new cdk.App();
 new F3AustinCdkStack(app, 'F3AustinCdkStack', {
     env: {
         account: '455224517414',
-        region: 'us-east-1'
-    }
+        region: 'us-east-1',
+    },
 });

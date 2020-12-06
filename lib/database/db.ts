@@ -1,15 +1,15 @@
-import { CfnOutput, SecretValue, Stack } from "@aws-cdk/core";
-import { DatabaseInstance, DatabaseInstanceEngine, MysqlEngineVersion } from "@aws-cdk/aws-rds";
-import { InstanceClass, InstanceSize, InstanceType, Port, SecurityGroup, Vpc } from "@aws-cdk/aws-ec2";
+import { CfnOutput, SecretValue, Stack } from '@aws-cdk/core';
+import { DatabaseInstance, DatabaseInstanceEngine, MysqlEngineVersion } from '@aws-cdk/aws-rds';
+import { InstanceClass, InstanceSize, InstanceType, Port, SecurityGroup, Vpc } from '@aws-cdk/aws-ec2';
 
 export class Db {
     public readonly hostname: string;
-    public readonly dbName = "wp";
-    public readonly mysqlUser = "admin";
-    public readonly mysqlPassword = "abc1234Abc";
+    public readonly dbName = 'wp';
+    public readonly mysqlUser = 'admin';
+    public readonly mysqlPassword = 'abc1234Abc';
 
     constructor(stack: Stack, vpc: Vpc, ec2SecurityGroup: SecurityGroup) {
-        const dbinstance = new DatabaseInstance(stack, "wordpress-mysql", {
+        const dbinstance = new DatabaseInstance(stack, 'wordpress-mysql', {
             databaseName: this.dbName,
             vpc,
             engine: DatabaseInstanceEngine.mysql({
@@ -27,8 +27,8 @@ export class Db {
 
         this.hostname = dbinstance.instanceEndpoint.hostname;
 
-        new CfnOutput(stack, "DbEndpoint", {
+        new CfnOutput(stack, 'DbEndpoint', {
             value: dbinstance.instanceEndpoint.hostname,
-        })
+        });
     }
 }

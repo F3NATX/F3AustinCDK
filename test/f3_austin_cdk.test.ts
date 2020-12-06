@@ -7,7 +7,9 @@ test('EC2 Instance Created', () => {
     // WHEN
     const stack = new F3AustinCdk.F3AustinCdkStack(app, 'MyTestStack');
     // THEN
-    expectCDK(stack).to(haveResource("AWS::EC2::Instance",{
-      InstanceType: "t2.micro",
-    }));
+    expectCDK(stack).to(
+        haveResource('AWS::EC2::Instance', {
+            InstanceType: 't2.micro',
+        })
+    );
 });
