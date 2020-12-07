@@ -15,7 +15,6 @@ import {
     AmazonLinuxGeneration,
     InitServiceRestartHandle,
     InitService,
-    InitSource,
 } from '@aws-cdk/aws-ec2';
 import { Db } from '../database/db';
 
@@ -46,13 +45,23 @@ export class Webserver {
                     InitPackage.yum('php'),
                     InitPackage.yum('php-mysql'),
                     InitCommand.shellCommand('amazon-linux-extras install -y php7.3'),
-                    InitPackage.yum('git'), // For synchronizing the deployed site with updates releases in github.
+                    // Start the webserver on the host
                     InitService.enable('httpd', {
                         enabled: true,
                         ensureRunning: true,
                         serviceRestartHandle: handle,
                     }),
-                    InitSource.fromGitHub(webroot, 'F3NATX', 'F3AustinWP', 'mainline'),
+
+                    // For synchronizing the deployed site with updates releases in github.
+                    InitCommand.shellCommand('yum install mysql -y'),
+
+                    // For synchronizing the deployed site with updates releases in github.
+                    InitPackage.yum('git'),
+
+                    // Copying the latest F3Austin wordpress website
+                    InitCommand.shellCommand('git clone https://github.com/F3NATX/F3AustinWP ' + webroot),
+
+                    // Update the wordpress sample configuration to communicate with the database
                     InitCommand.shellCommand('mv wp-config-sample.php wp-config.php', { cwd: webroot }),
                     InitCommand.shellCommand(
                         Fn.sub('perl -pi -e "s/database_name_here/${dbname}/g" wp-config.php', {
@@ -73,8 +82,8 @@ export class Webserver {
                         { cwd: webroot }
                     ),
                     InitCommand.shellCommand(
-                        Fn.sub('perl -pi -e "s/localhost/${endpoint}/g" wp-config.php', {
-                            endpoint: db.hostname,
+                        Fn.sub('perl -pi -e "s/localhost/${dbendpoint}/g" wp-config.php', {
+                            dbendpoint: db.hostname,
                         }),
                         { cwd: webroot }
                     ),
@@ -89,17 +98,38 @@ export class Webserver {
                         ' wp-config.php`,
                         { cwd: webroot }
                     ),
+
+                    // Setup upload directory on the host
                     InitCommand.shellCommand('mkdir wp-content/uploads', {
-                        cwd: webroot,
-                    }),
-                    InitCommand.shellCommand('chown apache wp-content/uploads', {
                         cwd: webroot,
                     }),
                     InitCommand.shellCommand('chmod 755 wp-content/uploads', {
                         cwd: webroot,
                     }),
+                    InitCommand.shellCommand('chown apache wp-content/uploads', {
+                        cwd: webroot,
+                    }),
+
+                    // Make sure httpd webserver is up and will automatically be restarted on reboot
                     InitCommand.shellCommand('systemctl start httpd'),
                     InitCommand.shellCommand('systemctl enable httpd'),
+
+                    // Unforunately this command doesn't work, I'll need to look into how this is possible or modify
+                    // the chained commands into a script file.
+                    // Update the mysql db to point to the latest url for the site
+                    // InitCommand.shellCommand(
+                    //     Fn.sub(
+                    //         `ipaddress=$(curl http://169.254.169.254/latest/meta-data/public-ipv4 -s)
+                    //          | echo "UPDATE wp_options SET option_value='http://$ipaddress' WHERE option_name IN ('siteurl', 'home');"
+                    //          | mysql --host=\${dbendpoint} --database=\${dbname} --user=\${dbname} --password=\${dbpass}`,
+                    //         {
+                    //             dbendpoint: db.hostname,
+                    //             dbname: db.dbName,
+                    //             dbuser: db.mysqlUser,
+                    //             dbpass: db.mysqlPassword,
+                    //         }
+                    //     )
+                    // ),
                 ])
             ),
             securityGroup: sg,
