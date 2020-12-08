@@ -54,6 +54,9 @@ export class Webserver {
 
                     // For synchronizing the deployed site with updates releases in github.
                     InitCommand.shellCommand('yum install mysql -y'),
+                    // Utility used by VersionPress system
+                    InitCommand.shellCommand('yum install php-mbstring -y'),
+                    InitCommand.shellCommand('yum install php-gd -y'),
 
                     // For synchronizing the deployed site with updates releases in github.
                     InitPackage.yum('git'),
@@ -106,9 +109,12 @@ export class Webserver {
                     InitCommand.shellCommand('chmod 755 wp-content/uploads', {
                         cwd: webroot,
                     }),
-                    InitCommand.shellCommand('chown apache wp-content/uploads', {
+                    // This is giving apache ownership over the entire webroot, not just the single folder
+                    InitCommand.shellCommand(`chown -R apache ${webroot}`, {
                         cwd: webroot,
                     }),
+
+                    // TODO: HOW TO SECURE .GIT FOLDERS???
 
                     // Make sure httpd webserver is up and will automatically be restarted on reboot
                     InitCommand.shellCommand('systemctl start httpd'),
