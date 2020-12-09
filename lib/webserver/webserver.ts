@@ -114,7 +114,10 @@ export class Webserver {
                         cwd: webroot,
                     }),
 
-                    // TODO: HOW TO SECURE .GIT FOLDERS???
+                    // Enable HTAccess files by updated the httpd configuration
+                    InitCommand.shellCommand('perl -pi -e "s/AllowOverride All/AllowOverride None/g" httpd.conf', {
+                        cwd: '/etc/httpd/conf/',
+                    }),
 
                     // Make sure httpd webserver is up and will automatically be restarted on reboot
                     InitCommand.shellCommand('systemctl start httpd'),
