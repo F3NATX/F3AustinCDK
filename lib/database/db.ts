@@ -21,6 +21,7 @@ export class Db {
                 username: this.mysqlUser,
                 password: SecretValue.plainText(this.mysqlPassword),
             },
+            allocatedStorage: 20,
         });
 
         dbinstance.connections.allowFrom(ec2SecurityGroup, Port.tcp(3306));
