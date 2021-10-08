@@ -15,16 +15,21 @@ import {
     AmazonLinuxGeneration,
     InitServiceRestartHandle,
     InitService,
+    InitFile,
 } from '@aws-cdk/aws-ec2';
+import { ManagedPolicy } from '@aws-cdk/aws-iam';
 import { Db } from '../database/db';
 
 export class Webserver {
     constructor(stack: Stack, vpc: Vpc, sg: SecurityGroup, db: Db) {
         const webroot = '/var/www/html';
+        const githubSshKeyPath = '/home/ec2-user/github_rsa';
 
         const amznLinux = MachineImage.latestAmazonLinux({
             generation: AmazonLinuxGeneration.AMAZON_LINUX_2,
         });
+
+        const ec2SsmManagementPolicy = ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore');
 
         const handle = new InitServiceRestartHandle();
         const instance = new Instance(stack, 'Wordpress Server', {
@@ -61,88 +66,75 @@ export class Webserver {
                     // For synchronizing the deployed site with updates releases in github.
                     InitPackage.yum('git'),
 
-                    // Copying the latest F3Austin wordpress website
-                    InitCommand.shellCommand('git clone https://github.com/F3NATX/F3AustinWP ' + webroot),
+                    InitFile.fromString('/home/ec2-user/install.sh', `
 
-                    // Update the wordpress sample configuration to communicate with the database
-                    InitCommand.shellCommand('mv wp-config-sample.php wp-config.php', { cwd: webroot }),
-                    InitCommand.shellCommand(
-                        Fn.sub('perl -pi -e "s/database_name_here/${dbname}/g" wp-config.php', {
-                            dbname: db.dbName,
-                        }),
-                        { cwd: webroot }
-                    ),
-                    InitCommand.shellCommand(
-                        Fn.sub('perl -pi -e "s/username_here/${dbuser}/g" wp-config.php', {
-                            dbuser: db.mysqlUser,
-                        }),
-                        { cwd: webroot }
-                    ),
-                    InitCommand.shellCommand(
-                        Fn.sub('perl -pi -e "s/password_here/${dbpass}/g" wp-config.php', {
-                            dbpass: db.mysqlPassword,
-                        }),
-                        { cwd: webroot }
-                    ),
-                    InitCommand.shellCommand(
-                        Fn.sub('perl -pi -e "s/localhost/${dbendpoint}/g" wp-config.php', {
-                            dbendpoint: db.hostname,
-                        }),
-                        { cwd: webroot }
-                    ),
-                    InitCommand.shellCommand(
-                        `perl -i -pe'
-                            BEGIN {
-                            @chars = ("a" .. "z", "A" .. "Z", 0 .. 9);
-                            push @chars, split //, "!@#$%^&*()-_ []{}<>~\`+=,.;:/?|";
-                            sub salt { join "", map $chars[ rand @chars ], 1 .. 64 }
-                            }
-                            s/put your unique phrase here/salt()/ge
-                        ' wp-config.php`,
-                        { cwd: webroot }
-                    ),
+                    if [ -f "${githubSshKeyPath}" ]; then
+                        echo "Generating SSH Key for github"
+                        ssh-keygen -t rsa -b 4096 -C peternied@hotmail.com -f ${githubSshKeyPath} -q -N ""
+                        cat ${githubSshKeyPath}.pub
+                        echo "Copy and past output in new deploy key https://github.com/F3NATX/F3AustinWP/settings/keys then press enter 3 times"
+                        read
+                        read
+                        read
+                    else
+                        echo "SSH Key for github already found"
+                    fi
 
-                    // Setup upload directory on the host
-                    InitCommand.shellCommand('mkdir wp-content/uploads', {
-                        cwd: webroot,
-                    }),
-                    InitCommand.shellCommand('chmod 755 wp-content/uploads', {
-                        cwd: webroot,
-                    }),
-                    // This is giving apache ownership over the entire webroot, not just the single folder
-                    InitCommand.shellCommand(`chown -R apache ${webroot}`, {
-                        cwd: webroot,
-                    }),
+                    if [ ! -d "/var/www/html/.git" ]; then
+                       echo "Downloading Wordpress Base Site"
+                       rm /var/www/html
+                       git clone git@github.com:F3NATX/F3AustinWP.git ${webroot} -b www3
+                    fi
 
-                    // Enable HTAccess files by updated the httpd configuration
-                    InitCommand.shellCommand('perl -pi -e "s/AllowOverride All/AllowOverride None/g" httpd.conf', {
-                        cwd: '/etc/httpd/conf/',
-                    }),
+                    cd ${webroot}
 
-                    // Make sure httpd webserver is up and will automatically be restarted on reboot
-                    InitCommand.shellCommand('systemctl start httpd'),
-                    InitCommand.shellCommand('systemctl enable httpd'),
+                    echo "Updating database names in wordpress configuration"
+                    ${Fn.sub('perl -pi -e "s/database_name_here/${dbname}/g" wp-config.php', { dbname: db.dbName })}
+                    ${Fn.sub('perl -pi -e "s/username_here/${dbuser}/g" wp-config.php', { dbuser: db.mysqlUser })}
+                    ${Fn.sub('perl -pi -e "s/password_here/${dbpass}/g" wp-config.php', { dbpass: db.mysqlPassword })}
+                    ${Fn.sub('perl -pi -e "s/localhost/${dbendpoint}/g" wp-config.php', { dbendpoint: db.hostname })}
 
-                    // Unforunately this command doesn't work, I'll need to look into how this is possible or modify
-                    // the chained commands into a script file.
-                    // Update the mysql db to point to the latest url for the site
-                    // InitCommand.shellCommand(
-                    //     Fn.sub(
-                    //         `ipaddress=$(curl http://169.254.169.254/latest/meta-data/public-ipv4 -s)
-                    //          | echo "UPDATE wp_options SET option_value='http://$ipaddress' WHERE option_name IN ('siteurl', 'home');"
-                    //          | mysql --host=\${dbendpoint} --database=\${dbname} --user=\${dbname} --password=\${dbpass}`,
-                    //         {
-                    //             dbendpoint: db.hostname,
-                    //             dbname: db.dbName,
-                    //             dbuser: db.mysqlUser,
-                    //             dbpass: db.mysqlPassword,
-                    //         }
-                    //     )
-                    // ),
+                    echo "Regenerate wordpress site salt"
+                    perl -i -pe'
+                    BEGIN {
+                        @chars = ("a" .. "z", "A" .. "Z", 0 .. 9);
+                        push @chars, split //, "!@#$%^&*()-_ []{}<>~\`+=,.;:/?|";
+                        sub salt { join "", map $chars[ rand @chars ], 1 .. 64 }
+                        }
+                        s/put your unique phrase here/salt()/ge
+                    ' wp-config.php
+
+                    echo "Clean up permissions and ownership"
+                    mkdir -p wp-content/uploads
+                    chmod 755 -R /var/www/html
+                    chown -R apache ${webroot}
+
+                    echo "Open up http access"
+                    cd /etc/httpd/conf/
+                    perl -pi -e "s/AllowOverride All/AllowOverride None/g" httpd.conf
+
+                    echo "Starting httpd service"
+                    systemctl start httpd
+                    systemctl enable httpd
+
+                    if [ ! -f '/usr/bin/wp' ]; then
+                        echo "Install WP command line utility"
+                        curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+                        php wp-cli.phar --info
+                        chmod +x wp-cli.phar
+                        mv wp-cli.phar /usr/bin/wp
+                    fi
+
+                    echo "Verify website is opertional"
+                    echo "New Wordpress site IP Address $(curl http://169.254.169.254/latest/meta-data/public-ipv4 -s)"
+
+                    `),
                 ])
             ),
             securityGroup: sg,
         });
+
+        instance.role.addManagedPolicy(ec2SsmManagementPolicy);
 
         new CfnOutput(stack, 'Wordpress Server IP Address', {
             value: instance.instancePublicIp,
